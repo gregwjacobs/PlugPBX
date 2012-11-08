@@ -1,6 +1,6 @@
 See http://www.plugpbx.org
 
-PlugPBX is a pre-build image you can boot your SheevaPlug and have a full featured PBX phone system.
+PlugPBX is a pre-built image you can boot your SheevaPlug and have a full featured PBX phone system.
 
 Based On:
 
@@ -10,6 +10,8 @@ Based On:
  * Webmin
 
 These are intended as build scripts to take a stock Debian booting SheevaPlug and setup/install/build
-a standard PlugPBX system automatically. 
+a standard PlugPBX system automatically. Its will a work in progress. 
+
+Look for tagged releases or branches later on, or feel free to pitch in. 
 
 
