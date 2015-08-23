@@ -9,9 +9,8 @@ Based On:
  * FreePBX
  * Webmin
 
-These are intended as build scripts to take a stock Debian booting SheevaPlug and setup/install/build
-a standard PlugPBX system automatically. Its will a work in progress. 
+The ansible playbook is intended as a build setup to task a stock Debian
+booting SheevaPlug and setup/install/build a standard PlugPBX system automatically.
+Its will a work in progress.
 
-Look for tagged releases or branches later on, or feel free to pitch in. 
-
-
+Look for tagged releases or branches later on, or feel free to pitch in.
