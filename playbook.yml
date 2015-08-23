@@ -1,9 +1,11 @@
 ---
 - hosts: all
   sudo: true
+  vars_files:
+    - "vars/urls.yml"
   tasks:
-    - name: update apt cache
-      apt: update_cache=true cache_valid_time=600
+    - name: Apt dist update
+      apt: upgrade=dist update_cache=true cache_valid_time=600
 
     - name: Install Avahi Daemon
       apt: name=avahi-daemon
@@ -29,23 +31,18 @@
       with_items:
        - webmin
 
-    - name: Install asterisk
-      apt: name=asterisk
-
-    - name: install linux linux-headers
-      action: shell apt-get install -y linux-headers-$(uname -r)
-
-    - name: Install FreePBX depends
+    - name: Install FreePBX/Asterisk depends
       apt: pkg={{item}} state=installed
       with_items:
        - build-essential
+       - linux-headers-{{ ansible_kernel }}
        - openssh-server
        - apache2
        - mysql-server
        - mysql-client
        - bison
        - flex
-       - php5 
+       - php5
        - php5-curl
        - php5-cli
        - php5-mysql
@@ -79,3 +76,41 @@
        - libneon27-dev
        - libsrtp0-dev
        - libspandsp-dev
+
+    - name: Git clone jansson
+      git: repo={{ janssonurl }} dest=/tmp/jansson
+
+    - name: Git clone pjproject
+      git: repo={{ pjprojecturl }} dest=/tmp/pjproject
+
+    - name: Download Asterisk
+      get_url: url={{ asteriskurl }} dest=/tmp/{{ asteriskfile }}
+
+    - name: Download Freepbx
+      get_url: url={{ freepbxurl }} dest=/tmp/{{ freepbxfile }}
+
+    - name: Unarchive Asterisk
+      unarchive: src=/tmp/{{ asteriskfile }} dest=/tmp/ copy=no
+
+    - name: Unarchive FreePBX
+      unarchive: src=/tmp/{{ freepbxfile }} dest=/tmp/ copy=no
+
+    - name: Install PearDB
+      shell: pear uninstall db && pear install db-1.7.14
+
+    - name: Compile pjproject
+      shell: ./configure --enable-shared --disable-sound --disable-resample --disable-video --disable-opencore-amr && make dep && make && make install
+      args:
+        chdir: /tmp/pjproject
+        creates: build.mak
+
+    - name: Compile jansson
+      shell: autoreconf -i && ./configure && make && make install
+      args:
+        chdir: /tmp/jansson
+        creates: Makefile
+
+    - name: Compile Asterisk
+      shell: ./configure && contrib/scripts/get_mp3_source.sh && make && make install && make config && ldconfig
+      args:
+        chdir: /tmp/asterisk-12.8.2

@@ -16,6 +16,9 @@ The ansible playbook is intended as a build setup to task a stock Debian
 booting SheevaPlug and setup/install/build a standard PlugPBX system automatically.
 Its will a work in progress.
 
+The ansible playbook is based on:
+http://wiki.freepbx.org/display/HTGS/Installing+FreePBX+12+on+Ubuntu+Server+14.04+LTS
+
 Look for tagged releases or branches later on, or feel free to pitch in.
 
 Testing
