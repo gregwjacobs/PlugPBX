@@ -13,7 +13,7 @@
     - name: Install Samba
       apt: name=samba
 
-    - name: webmin | Add webmin repo 
+    - name: webmin | Add webmin repo
       apt_repository: repo='deb http://download.webmin.com/download/repository sarge contrib' update_cache=yes
       when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
 
@@ -93,10 +93,10 @@
       unarchive: src=/tmp/{{ asteriskfile }} dest=/tmp/ copy=no
 
     - name: Unarchive FreePBX
-      unarchive: src=/tmp/{{ freepbxfile }} dest=/tmp/ copy=no
+      unarchive: src=/tmp/{{ freepbxfile }} dest=/usr/src/ copy=no
 
     - name: Install PearDB
-      shell: pear uninstall db && pear install db-1.7.14
+      shell: pear uninstall db && pear install DB
 
     - name: Compile pjproject
       shell: ./configure --enable-shared --disable-sound --disable-resample --disable-video --disable-opencore-amr && make dep && make && make install
@@ -114,3 +114,45 @@
       shell: ./configure && contrib/scripts/get_mp3_source.sh && make && make install && make config && ldconfig
       args:
         chdir: /tmp/asterisk-12.8.2
+        creates: makeopts
+
+    - name: Add asterisk user
+      user: name=asterisk
+
+    - name: Change permissions
+      file: path=/var/run/asterisk state=directory owner=asterisk
+      file: path=/etc/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/var/lib/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/var/log/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/var/spool/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/usr/lib/asterisk state=directory owner=asterisk recurse=yes
+
+    - name: Remove /var/www/html
+      file: path=/var/www/html state=absent
+
+    - name: Backup apache config
+      shell: cp /etc/apache2/envvars /etc/apache2/envvars_orig
+      args:
+        creates: /etc/apache2/envvars_orig
+
+    - name: Modify Apache Config
+      lineinfile: dest=/etc/php5/apache2/php.ini regexp="^upload_max_filesize =*" line="upload_max_filesize = 120M" state=present
+
+    - name: Modfiy Apache User envvar
+      lineinfile: dest=/etc/apache2/envvars regexp="^export APACHE_RUN_USER=*" line="export APACHE_RUN_USER=asterisk" state=present
+
+      lineinfile: dest=/etc/apache2/envvars regexp="^export APACHE_RUN_GROUP=*" line="export APACHE_RUN_GROUP=asterisk" state=present
+
+    - name: Modfiy Apache Group envvar
+      lineinfile:
+        dest: /etc/apache2/envvars
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      with_items:
+        - { regexp: "^export APACHE_RUN_USER=www-data", line: "export APACHE_RUN_USER=asterisk" }
+        - { regexp: "^export APACHE_RUN_GROUP=www-data", line: "export APACHE_RUN_GROUP=asterisk" }
+
+    - name: Template odbc
+      template: src=templates/odbcinst.ini dest=/etc/odbcinst.ini owner=root group=root mode=0644
+      template: src=templates/odbc.ini dest=/etc/odbc.ini owner=root group=root mode=0644
