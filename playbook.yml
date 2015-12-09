@@ -76,6 +76,7 @@
        - libneon27-dev
        - libsrtp0-dev
        - libspandsp-dev
+       - python-mysqldb
 
     - name: Git clone jansson
       git: repo={{ janssonurl }} dest=/tmp/jansson
@@ -96,7 +97,7 @@
       unarchive: src=/tmp/{{ freepbxfile }} dest=/usr/src/ copy=no
 
     - name: Install PearDB
-      shell: pear uninstall db && pear install DB
+      shell: pear uninstall db && pear upgrade pear-1.10.1 && pear install db-1.7.14
 
     - name: Compile pjproject
       shell: ./configure --enable-shared --disable-sound --disable-resample --disable-video --disable-opencore-amr && make dep && make && make install
@@ -111,13 +112,13 @@
         creates: Makefile
 
     - name: Compile Asterisk
-      shell: ./configure && contrib/scripts/get_mp3_source.sh && make && make install && make config && ldconfig
+      shell: ./configure && contrib/scripts/get_mp3_source.sh; make && make install && make config && ldconfig
       args:
         chdir: /tmp/asterisk-12.8.2
         creates: makeopts
 
     - name: Add asterisk user
-      user: name=asterisk
+      user: name=asterisk groups=tty append=yes
 
     - name: Change permissions
       file: path=/var/run/asterisk state=directory owner=asterisk
@@ -126,6 +127,7 @@
       file: path=/var/log/asterisk state=directory owner=asterisk recurse=yes
       file: path=/var/spool/asterisk state=directory owner=asterisk recurse=yes
       file: path=/usr/lib/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/dev/tty9 owner=asterisk
 
     - name: Remove /var/www/html
       file: path=/var/www/html state=absent
@@ -156,3 +158,15 @@
     - name: Template odbc
       template: src=templates/odbcinst.ini dest=/etc/odbcinst.ini owner=root group=root mode=0644
       template: src=templates/odbc.ini dest=/etc/odbc.ini owner=root group=root mode=0644
+
+    - name: Restart Apache
+      service: name=apache2 state=restarted
+
+    - name: Add mysql databases
+      mysql_db: name=asterisk state=present
+      mysql_db: name=asteriskcdrdb state=present
+
+    - name: Configure database privileges
+      shell: mysql -u root -e "GRANT ALL PRIVILEGES ON asterisk.* TO asteriskuser@localhost IDENTIFIED BY '${ASTERISK_DB_PW}';"
+      shell: mysql -u root -e "GRANT ALL PRIVILEGES ON asteriskcdrdb.* TO asteriskuser@localhost IDENTIFIED BY '${ASTERISK_DB_PW}';"
+      shell: mysql -u root -e "flush privileges;"
