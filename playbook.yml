@@ -162,11 +162,14 @@
     - name: Restart Apache
       service: name=apache2 state=restarted
 
-    - name: Add mysql databases
+    - name: Add mysql asterisk database
       mysql_db: name=asterisk state=present
+
+    - name: Add mysql asteriskcdrdb database
       mysql_db: name=asteriskcdrdb state=present
 
     - name: Configure database privileges
-      shell: mysql -u root -e "GRANT ALL PRIVILEGES ON asterisk.* TO asteriskuser@localhost IDENTIFIED BY '${ASTERISK_DB_PW}';"
-      shell: mysql -u root -e "GRANT ALL PRIVILEGES ON asteriskcdrdb.* TO asteriskuser@localhost IDENTIFIED BY '${ASTERISK_DB_PW}';"
-      shell: mysql -u root -e "flush privileges;"
+      mysql_user:
+        name=asteriskuser
+        priv=asterisk.*:ALL,GRANT/asteriskcdrdb.*:ALL,GRANT
+        password="{{ lookup('password', '/tmp/passwordfile') }}"
