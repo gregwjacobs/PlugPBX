@@ -1,0 +1,178 @@
+---
+- hosts: all
+  sudo: true
+  vars_files:
+    - "vars/urls.yml"
+  tasks:
+    - name: Apt dist update
+      apt: upgrade=dist update_cache=true cache_valid_time=600
+
+    - name: Install Avahi Daemon
+      apt: name=avahi-daemon
+
+    - name: Install Samba
+      apt: name=samba
+
+    - name: webmin | Add webmin repo
+      apt_repository: repo='deb http://download.webmin.com/download/repository sarge contrib' update_cache=yes
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+    - name: webmin | Add webmin mirror repo 
+      apt_repository: repo='deb http://webmin.mirror.somersettechsolutions.co.uk/repository sarge contrib' update_cache=yes
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+    - name: webmin | Addkey webmin
+      apt_key: url=http://www.webmin.com/jcameron-key.asc  state=present
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+    - name: webmin | Install webmin
+      apt: pkg={{ item }} state=present update_cache=yes
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+      with_items:
+       - webmin
+
+    - name: Install FreePBX/Asterisk depends
+      apt: pkg={{item}} state=installed
+      with_items:
+       - build-essential
+       - linux-headers-{{ ansible_kernel }}
+       - openssh-server
+       - apache2
+       - mysql-server
+       - mysql-client
+       - bison
+       - flex
+       - php5
+       - php5-curl
+       - php5-cli
+       - php5-mysql
+       - php-pear
+       - php-db
+       - php5-gd
+       - curl
+       - sox
+       - libncurses5-dev
+       - libssl-dev
+       - libmysqlclient-dev
+       - mpg123
+       - libxml2-dev
+       - libnewt-dev
+       - sqlite3
+       - libsqlite3-dev
+       - pkg-config
+       - automake
+       - libtool
+       - autoconf
+       - git
+       - subversion
+       - unixodbc-dev
+       - uuid
+       - uuid-dev
+       - libasound2-dev
+       - libogg-dev
+       - libvorbis-dev
+       - libcurl4-openssl-dev
+       - libical-dev
+       - libneon27-dev
+       - libsrtp0-dev
+       - libspandsp-dev
+       - python-mysqldb
+
+    - name: Asterisk build dep
+      apt: pkg=asterisk state=build-dep
+
+    - name: Git clone jansson
+      git: repo={{ janssonurl }} dest=/root/jansson
+
+    - name: Git clone pjproject
+      git: repo={{ pjprojecturl }} dest=/root/pjproject
+
+    - name: Download Asterisk
+      get_url: url={{ asteriskurl }} dest=/root/{{ asteriskfile }}
+
+    - name: Download Freepbx
+      get_url: url={{ freepbxurl }} dest=/root/{{ freepbxfile }}
+
+    - name: Unarchive Asterisk
+      unarchive: src=/root/{{ asteriskfile }} dest=/root/ copy=no
+
+    - name: Unarchive FreePBX
+      unarchive: src=/root/{{ freepbxfile }} dest=/usr/src/ copy=no
+
+    - name: Install PearDB
+      shell: pear uninstall db && pear upgrade pear-1.10.1 && pear install db-1.7.14
+
+    - name: Compile pjproject
+      shell: ./configure --enable-shared --disable-sound --disable-resample --disable-video --disable-opencore-amr CFLAGS='-O2 -DNDEBUG' && make dep && make && make install && ldconfig
+      args:
+        chdir: /root/pjproject
+        creates: build.mak
+
+    - name: Compile jansson
+      shell: autoreconf -i && ./configure && make && make install
+      args:
+        chdir: /root/jansson
+        creates: Makefile
+
+    - name: Compile Asterisk
+      shell: PKG_CONFIG_PATH=/usr/lib/pkgconfig ./configure && contrib/scripts/get_mp3_source.sh; make menuselect.makeopts && make && make install && make config && ldconfig
+      args:
+        chdir: /root/asterisk-12.8.2
+        creates: makeopts
+
+    - name: Add asterisk user
+      user: name=asterisk groups=tty append=yes
+
+    - name: Change permissions
+      file: path=/var/run/asterisk state=directory owner=asterisk
+      file: path=/etc/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/var/lib/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/var/log/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/var/spool/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/usr/lib/asterisk state=directory owner=asterisk recurse=yes
+      file: path=/dev/tty9 owner=asterisk
+
+    - name: Remove /var/www/html
+      file: path=/var/www/html state=absent
+
+    - name: Backup apache config
+      shell: cp /etc/apache2/envvars /etc/apache2/envvars_orig
+      args:
+        creates: /etc/apache2/envvars_orig
+
+    - name: Modify Apache Config
+      lineinfile: dest=/etc/php5/apache2/php.ini regexp="^upload_max_filesize =*" line="upload_max_filesize = 120M" state=present
+
+    - name: Modfiy Apache User envvar
+      lineinfile: dest=/etc/apache2/envvars regexp="^export APACHE_RUN_USER=*" line="export APACHE_RUN_USER=asterisk" state=present
+
+      lineinfile: dest=/etc/apache2/envvars regexp="^export APACHE_RUN_GROUP=*" line="export APACHE_RUN_GROUP=asterisk" state=present
+
+    - name: Modfiy Apache Group envvar
+      lineinfile:
+        dest: /etc/apache2/envvars
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      with_items:
+        - { regexp: "^export APACHE_RUN_USER=www-data", line: "export APACHE_RUN_USER=asterisk" }
+        - { regexp: "^export APACHE_RUN_GROUP=www-data", line: "export APACHE_RUN_GROUP=asterisk" }
+
+    - name: Template odbc
+      template: src=templates/odbcinst.ini dest=/etc/odbcinst.ini owner=root group=root mode=0644
+      template: src=templates/odbc.ini dest=/etc/odbc.ini owner=root group=root mode=0644
+
+    - name: Restart Apache
+      service: name=apache2 state=restarted
+
+    - name: Add mysql asterisk database
+      mysql_db: name=asterisk state=present
+
+    - name: Add mysql asteriskcdrdb database
+      mysql_db: name=asteriskcdrdb state=present
+
+    - name: Configure database privileges
+      mysql_user:
+        name=asteriskuser
+        priv=asterisk.*:ALL,GRANT/asteriskcdrdb.*:ALL,GRANT
+        password="{{ lookup('password', '/tmp/passwordfile') }}"
